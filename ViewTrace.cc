@@ -10,8 +10,8 @@
 #include "TTree.h"
 #include "TH1F.h"
 #include "TH2F.h"
+#include "TCutG.h"
 #include "TStopwatch.h"
-#include "TTreeIndex.h"
 
 #include "CommandLineInterface.hh"
 #include "Germanium.hh"
@@ -35,14 +35,12 @@ int main(int argc, char* argv[]){
   char* SettingFile = NULL;
   int vl = 0;
   int nmax = 0;
-  int mult = 0;
   CommandLineInterface* interface = new CommandLineInterface();
   interface->Add("-i", "inputfiles", &InputFile);
   interface->Add("-o", "outputfile", &OutputFile);
   interface->Add("-s", "settingsfile", &SettingFile);
   interface->Add("-v", "verbose", &vl);
   interface->Add("-n", "nmax", &nmax);
-  interface->Add("-m", "minimum germanium mult to write event", &mult);
   interface->CheckFlags(argc, argv);
 
   if(InputFile == NULL || OutputFile == NULL){
@@ -55,79 +53,52 @@ int main(int argc, char* argv[]){
 
   TFile* infile = new TFile(InputFile);
 
-  TTree* tr = (TTree*)infile->Get("Data_R");
+  TTree* tr = (TTree*)infile->Get("sorted");
   if(tr == NULL){
     cout << "could not find tree build in file " << InputFile << endl;
     return 3;
   }
 
-  TEnv* sett = new TEnv(SettingFile);
-  evtwdw = sett->GetValue("Event.Window",500000);
+  Germanium* ge = new Germanium();
+  tr->SetBranchAddress("germanium",&ge);
+  ULong64_t beamTS = 0;
+  tr->SetBranchAddress("beamTS",&beamTS);
 
-  ifstream gecalfile(sett->GetValue("Ge.Calfile","calfile.dat"));
-  double gain[nge];
-  double offset[nge];
-  double tshift[nge];
-  int ch;
-  gecalfile.ignore(1000,'\n');
-  for(int i=0;i<nge;i++){
-    gecalfile >> ch >> offset[ch] >> gain[ch] >> tshift[ch]; 
-    gecalfile.ignore(1000,'\n');
-  }
-
-  
-  
-  ULong64_t timestamp = -1;
-  tr->SetBranchAddress("Timestamp",&timestamp);
-  UShort_t board = -1;
-  tr->SetBranchAddress("Board",&board);
-  UShort_t channel = -1;
-  tr->SetBranchAddress("Channel",&channel);
-  UShort_t raw = -1;
-  tr->SetBranchAddress("Energy",&raw);
-  TArrayS *trace;
-  tr->SetBranchAddress("Samples",&trace);
-  
   Double_t nentries = tr->GetEntries();
   if(nmax>0)
     nentries = nmax;
   cout << nentries << " entries in tree" << endl;
-  cout << "building tree index" << endl;
-  tr->LoadBaskets(2e9);
-  tr->BuildIndex("0","Timestamp");
-  TTreeIndex *index = (TTreeIndex*)tr->GetTreeIndex();
-  
-  TFile* ofile = new TFile(OutputFile,"recreate");
-  ofile->cd();
-
-  TTree* stree = new TTree("sorted","timesorted events");
-  Germanium* ge = new Germanium();
-  stree->Branch("germanium",&ge,320000);
-  ULong64_t beamTS = 0;
-  stree->Branch("beamTS",&beamTS,320000);
 
   
   Int_t nbytes = 0;
   Int_t status;
+  TFile* ofile = new TFile(OutputFile,"recreate");
+  ofile->cd();
+  
+  TList *hlist = new TList();
+  TH1F* hdT = new TH1F("hdT","hdT",2100,-1e5,2e6);hlist->Add(hdT);
+  TH1F* hdTraw = new TH1F("hdTraw","hdTraw",2100,-1e5,2e6);hlist->Add(hdTraw);
+  TH1F* hE = new TH1F("hE","hE",8000,0,4000);hlist->Add(hE);
+  TH2F* hE_dT = new TH2F("hE_dT","hE_dT",2100,-1e5,2e6,2000,0,4000);hlist->Add(hE_dT);
 
-  ULong64_t last_TS = 0;
-  ULong64_t last_gammaTS = 0;
-  ULong64_t last_beamTS = 0;
+  TH2F* hE_summary = new TH2F("hE_summary","hE_summary",15,0,15,4000,0,4000);hlist->Add(hE_summary);
+  TH2F* hdT_summary = new TH2F("hdT_summary","hdT_summary",15,0,15,2100,-1e5,2e6);hlist->Add(hdT_summary);
 
-  TH1F* htdiff = new TH1F("htdiff","htdiff",1000,-2000000,2000000);
-  TH1F* htdiff_geb = new TH1F("htdiff_geb","htdiff_geb",1000,0,20000000);
-    
+  TH2F* hE_dT_g[nge];
+  TH2F* hE_dTraw_g[nge];
+  for(int g=0;g<nge;g++){
+    hE_dT_g[g] = new TH2F(Form("hE_dT_g%02d",g),Form("hE_dT_g%02d",g),2100,-1e5,2e6,2000,0,4000);hlist->Add(hE_dT_g[g]);
+    hE_dTraw_g[g] = new TH2F(Form("hE_dTraw_g%02d",g),Form("hE_dTraw_g%02d",g),2100,-1e5,2e6,2000,0,4000);hlist->Add(hE_dTraw_g[g]);
+  }
+
+  
   for(int i=0; i<nentries;i++){
     if(signal_received){
       break;
     }
     if(vl>2)
       cout << "getting entry " << i << endl;
-    Long64_t sorted = tr->LoadTree( index->GetIndex()[i] );
-    if(vl>2)
-      cout << "getting sorted entry " << sorted << endl;
-    
-    status = tr->GetEvent(sorted);
+    status = tr->GetEvent(i);
     if(vl>2)
       cout << "status " << status << endl;
     if(status == -1){
@@ -139,56 +110,27 @@ int main(int argc, char* argv[]){
       return 6;
     }
     nbytes += status;
-    //cout << timestamp << endl;
 
-    
-    Long64_t diff = timestamp - last_TS;
-    htdiff_geb->Fill(last_beamTS-last_gammaTS);
-    htdiff->Fill(diff);
-    if(abs(diff)>evtwdw && beamTS>0){
-      if(ge->GetMult()>mult)
-	stree->Fill();
-      ge->Clear();
-      beamTS=0;
-    }
+    if(vl>1)
+      cout << ge->GetMult() << endl;
+    for(int h=0; h<ge->GetMult(); h++){
+      GermaniumHit* hit = ge->GetHit(h);
+      hdTraw->Fill(hit->GetTimeStamp()*1.0-beamTS*1.0);
+      hdT->Fill(hit->GetTimeShifted()*1.0-beamTS*1.0);
+      hE->Fill(hit->GetEnergy());
+      hE_dT->Fill(hit->GetTimeShifted()*1.0-beamTS*1.0,hit->GetEnergy());
+      hE_dT_g[hit->GetChannel()]->Fill(hit->GetTimeShifted()*1.0-beamTS*1.0,hit->GetEnergy());
+      hE_dTraw_g[hit->GetChannel()]->Fill(hit->GetTimeStamp()*1.0-beamTS*1.0,hit->GetEnergy());
+      hE_summary->Fill(hit->GetChannel(),hit->GetEnergy());
+      hdT_summary->Fill(hit->GetChannel(),hit->GetTimeShifted()*1.0-beamTS*1.0);
       
-
-    
-    if(board==0){
-      //cout << "ge channel " << channel << endl;     
-      GermaniumHit *hit = new GermaniumHit();
-      hit->SetTimeStamp(timestamp);
-      hit->SetTimeShifted(timestamp-tshift[channel]);
-      hit->SetChannel(channel);
-      hit->SetRaw(raw);
-      hit->SetTrace(trace);
-      Float_t energy = raw*gain[channel]+offset[channel];
-      hit->SetEnergy(energy);
-      
-      
-      if(abs(diff)<evtwdw){
-	ge->AddHit(hit);
-      }
-      
-      last_TS = timestamp;
-      last_gammaTS = timestamp;
-    }
-    if(board==3){
-      //cout << "beam channel " << channel << endl;
-      beamTS = timestamp;
-      last_TS = timestamp;
-      last_beamTS = timestamp;
     }
 
     
-   
     if(i%10000 == 0){
       double time_end = get_time();
       cout<<setw(5)<<setiosflags(ios::fixed)<<setprecision(1)<<(100.*i)/nentries<<" % done\t"<<(Float_t)i/(time_end - time_start)<<" events/s " << (nentries-i)*(time_end - time_start)/(Float_t)i<<"s to go \r"<<flush;
     }
-
-
-    
   }
   cout << endl;
 
@@ -196,10 +138,18 @@ int main(int argc, char* argv[]){
   cout << "writing to file" << endl;
   cout << endl;
   ofile->cd();
-  ofile->cd();
-  stree->Write("",TObject::kOverwrite);
-  htdiff->Write();
-  htdiff_geb->Write();
+  TH1F* h1;
+  TH2F* h2;
+  TIter next(hlist);
+  while( (h1 = (TH1F*)next()) ){
+    if(h1->GetEntries()>0)
+      h1->Write("",TObject::kOverwrite);
+  }
+  while( (h2 = (TH2F*)next()) ){
+    if(h2->GetEntries()>0)
+      h2->Write("",TObject::kOverwrite);
+  }
+
   ofile->Close();
   delete tr;
   

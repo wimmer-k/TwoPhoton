@@ -20,17 +20,20 @@ public:
   void Clear();
   void PrintHit();
   void SetTimeStamp(ULong64_t timestamp){ftimestamp = timestamp;}
+  void SetTimeShifted(ULong64_t timeshifted){ftimeshifted = timeshifted;}
   void SetChannel(Short_t channel){fchannel = channel;}
   void SetRaw(Short_t energy){fraw = energy;}
   void SetEnergy(Float_t energy){fenergy = energy;}
   void SetTrace(TArrayS *trace);
   ULong64_t GetTimeStamp(){return ftimestamp;}
+  ULong64_t GetTimeShifted(){return ftimeshifted;}
   UShort_t GetChannel(){return fchannel;}
   UShort_t GetRaw(){return fraw;}
   Float_t GetEnergy(){return fenergy;}
   vector <Short_t> GetTrace(){return ftrace;}
 protected:
   ULong64_t ftimestamp;
+  ULong64_t ftimeshifted;
   UShort_t fchannel;
   Short_t fraw;
   Float_t fenergy;

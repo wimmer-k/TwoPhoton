@@ -8,6 +8,7 @@ GermaniumHit::GermaniumHit(){
 }
 void GermaniumHit::Clear(){
   ftimestamp = -1;
+  ftimeshifted = -1;
   fchannel = -1;
   fraw = -1;
   fenergy = -1;
@@ -15,7 +16,7 @@ void GermaniumHit::Clear(){
 }
 void GermaniumHit::PrintHit(){
   cout << __PRETTY_FUNCTION__ << endl;
-  cout << "channel " << fchannel << ", ts " << ftimestamp<< endl;
+  cout << "channel " << fchannel << ", ts " << ftimestamp << ", shifted " << ftimeshifted << endl;
   cout << " raw " << fraw << ", energy " << fenergy << endl;
 }
 void GermaniumHit::SetTrace(TArrayS *trace){

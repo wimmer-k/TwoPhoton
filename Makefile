@@ -30,10 +30,14 @@ ifeq ($(USING_ROOT_6),1)
 	EXTRAS =  GermaniumDictionary_rdict.pcm 
 endif
 
-all: $(LIB_DIR)/libTwoPhoton.so $(EXTRAS) BuildEvents
+all: $(LIB_DIR)/libTwoPhoton.so $(EXTRAS) BuildEvents ViewTrace
 
 
 BuildEvents: BuildEvents.cc $(LIB_DIR)/libTwoPhoton.so
+	@echo "Compiling $@"
+	@$(CPP) $(CFLAGS) $(INCLUDES) $< $(LIBS) $(O_FILES) -o $(BIN_DIR)/$@ 
+
+ViewTrace: ViewTrace.cc $(LIB_DIR)/libTwoPhoton.so
 	@echo "Compiling $@"
 	@$(CPP) $(CFLAGS) $(INCLUDES) $< $(LIBS) $(O_FILES) -o $(BIN_DIR)/$@ 
 
