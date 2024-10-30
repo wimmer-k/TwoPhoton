@@ -32,13 +32,13 @@ int main(int argc, char* argv[]){
   signal(SIGINT,signalhandler);
   char* InputFile = NULL;
   char* OutputFile = NULL;
-  char* SettingFile = NULL;
+  char* CutsFile = NULL;
   int vl = 0;
   int nmax = 0;
   CommandLineInterface* interface = new CommandLineInterface();
   interface->Add("-i", "inputfiles", &InputFile);
   interface->Add("-o", "outputfile", &OutputFile);
-  interface->Add("-s", "settingsfile", &SettingFile);
+  interface->Add("-c", "cutsfile", &CutsFile);
   interface->Add("-v", "verbose", &vl);
   interface->Add("-n", "nmax", &nmax);
   interface->CheckFlags(argc, argv);
@@ -59,6 +59,13 @@ int main(int argc, char* argv[]){
     return 3;
   }
 
+  TFile* fc = new TFile(CutsFile);
+  TCutG *c_compton[nge];
+  for(int i=0;i<nge;i++){
+    c_compton[i] = (TCutG*)fc->Get(Form("compton_%02d",i));
+  }
+
+  
   Germanium* ge = new Germanium();
   tr->SetBranchAddress("germanium",&ge);
   ULong64_t beamTS = 0;
@@ -86,10 +93,22 @@ int main(int argc, char* argv[]){
 
   TH2F* hE_dT_g[nge];
   TH2F* hE_dTraw_g[nge];
+  TH2F* htrace[nge];
+  TH2F* htrace_photo[nge];
+  TH2F* htrace_compton[nge];
+  TH2F* htrace_300lowT[nge];
+  TH2F* htrace_300higT[nge];
+  
   for(int g=0;g<nge;g++){
     hE_dT_g[g] = new TH2F(Form("hE_dT_g%02d",g),Form("hE_dT_g%02d",g),2100,-1e5,2e6,2000,0,4000);hlist->Add(hE_dT_g[g]);
     hE_dTraw_g[g] = new TH2F(Form("hE_dTraw_g%02d",g),Form("hE_dTraw_g%02d",g),2100,-1e5,2e6,2000,0,4000);hlist->Add(hE_dTraw_g[g]);
+    htrace[g] = new TH2F(Form("htrace_g%02d",g),Form("htrace_g%02d",g),700,0,700,6000,0,12000);hlist->Add(htrace[g]);
+    htrace_photo[g] = new TH2F(Form("htrace_photo_g%02d",g),Form("htrace_photo_g%02d",g),700,0,700,6000,0,12000);hlist->Add(htrace_photo[g]);
+    htrace_compton[g] = new TH2F(Form("htrace_compton_g%02d",g),Form("htrace_compton_g%02d",g),700,0,700,6000,0,12000);hlist->Add(htrace_compton[g]);
+    htrace_300lowT[g] = new TH2F(Form("htrace_300lowT_g%02d",g),Form("htrace_300lowT_g%02d",g),700,0,700,6000,0,12000);hlist->Add(htrace_300lowT[g]);
+    htrace_300higT[g] = new TH2F(Form("htrace_300higT_g%02d",g),Form("htrace_300higT_g%02d",g),700,0,700,6000,0,12000);hlist->Add(htrace_300higT[g]);
   }
+  
 
   
   for(int i=0; i<nentries;i++){
@@ -123,7 +142,20 @@ int main(int argc, char* argv[]){
       hE_dTraw_g[hit->GetChannel()]->Fill(hit->GetTimeStamp()*1.0-beamTS*1.0,hit->GetEnergy());
       hE_summary->Fill(hit->GetChannel(),hit->GetEnergy());
       hdT_summary->Fill(hit->GetChannel(),hit->GetTimeShifted()*1.0-beamTS*1.0);
-      
+      vector <Short_t> trace= hit->GetTrace();
+      for(UShort_t t=0;t<trace.size();t++){
+	htrace[hit->GetChannel()]->Fill(t,trace.at(t));
+	if(fabs(hit->GetEnergy()-834.6)<3)
+	  htrace_photo[hit->GetChannel()]->Fill(t,trace.at(t));
+	if(c_compton[hit->GetChannel()]->IsInside(hit->GetTimeShifted()*1.0-beamTS*1.0,hit->GetEnergy()))
+	  htrace_compton[hit->GetChannel()]->Fill(t,trace.at(t));
+	if(fabs(hit->GetEnergy()-300)<3){
+	  if((hit->GetTimeShifted()*1.0-beamTS*1.0) >0 && (hit->GetTimeShifted()*1.0-beamTS*1.0)<100)
+	    htrace_300lowT[hit->GetChannel()]->Fill(t,trace.at(t));
+	  if((hit->GetTimeShifted()*1.0-beamTS*1.0) >150 && (hit->GetTimeShifted()*1.0-beamTS*1.0)<200)
+	    htrace_300higT[hit->GetChannel()]->Fill(t,trace.at(t));
+	}
+      }
     }
 
     
