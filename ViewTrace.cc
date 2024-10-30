@@ -150,9 +150,9 @@ int main(int argc, char* argv[]){
 	if(c_compton[hit->GetChannel()]->IsInside(hit->GetTimeShifted()*1.0-beamTS*1.0,hit->GetEnergy()))
 	  htrace_compton[hit->GetChannel()]->Fill(t,trace.at(t));
 	if(fabs(hit->GetEnergy()-300)<3){
-	  if((hit->GetTimeShifted()*1.0-beamTS*1.0) >0 && (hit->GetTimeShifted()*1.0-beamTS*1.0)<100)
+	  if((hit->GetTimeShifted()*1.0-beamTS*1.0) >0 && (hit->GetTimeShifted()*1.0-beamTS*1.0)<100000)
 	    htrace_300lowT[hit->GetChannel()]->Fill(t,trace.at(t));
-	  if((hit->GetTimeShifted()*1.0-beamTS*1.0) >150 && (hit->GetTimeShifted()*1.0-beamTS*1.0)<200)
+	  if((hit->GetTimeShifted()*1.0-beamTS*1.0) >150000 && (hit->GetTimeShifted()*1.0-beamTS*1.0)<250000)
 	    htrace_300higT[hit->GetChannel()]->Fill(t,trace.at(t));
 	}
       }
